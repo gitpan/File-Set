@@ -45,7 +45,7 @@ sub-directories ignored.
 =cut
 
 # Use modules {{{
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
 use Cwd;
 use Digest::MD5;
@@ -250,7 +250,7 @@ sub canon_path {
   return wantarray ? @Paths : $Paths[0];
 }
 
-=item I<list($Context, $Callback)>
+=item I<list($Context, $Callback, $ErrorHandler)>
 
 The main method call. Iterates through all dirs, sub-dirs and
 files added through C<add()> but not excluded through C<exclude()>
@@ -291,12 +291,31 @@ Dev Ino Mode NLink Uid Gid RDev Size ATime MTime CTime BlkSize Blocks
 
 =back
 
+The $ErrorHandler parameter controls error handling during the recursion.
+This can happen for instance if files/directories are deleted during
+the traversal.
+
+=over 4
+
+=item C<false (eg undef/0/"")>
+
+If not passed or false value, then any errors are ignored
+
+=item C<true (eg 1)>
+
+If true, then any errors cause a die to occur
+
+=item C<sub-ref>
+
+If a sub ref, then the sub ref is called with the file/directory
+name that went missing during the traversal
+
+=back
+
 =cut
 sub list {
-  my $Self = shift;
-
-  my $Context = shift;
-  my $ListCB = shift || die "No callback passed";
+  my ($Self, $Context, $ListCB, $ErrorHandler) = @_;
+  $ListCB || die "No callback passed";
 
   my ($Paths, $Excludes, $Prefix, $Opts) = @$Self{qw(Paths Excludes Prefix)};
   @_ = @$Paths;
@@ -312,7 +331,11 @@ sub list {
     @Stat{qw(Dev Ino Mode NLink Uid Gid RDev Size ATime MTime CTime BlkSize Blocks)}
       = lstat("$Prefix/$_");
 
-    if (!-e _)   { die "Could not stat '$Prefix/$_': $!"; }
+    if (!-e _)   {
+      next if !$ErrorHandler;
+      $ErrorHandler->("$Prefix/$_") if ref($ErrorHandler);
+      die "Could not stat '$Prefix/$_': $!";
+    }
     elsif (-f _) { $Stat{Type} = 'f'; }
     elsif (-l _) { $Stat{Type} = 'l'; }
     elsif (-d _) {
@@ -320,12 +343,19 @@ sub list {
       # If not recursing, pretend this dir doesn't even exist...
       next if $Opts->{recurse} < 0;
 
+      # Copy $Opts for recurse. Set to -1 if not recursing. Will catch
+      #  all contained files, but sub-dirs will be skipped by above conditional
       my %Opts = %$Opts;
       $Opts{recurse}-- if !$Opts{recurse};
       $Stat{Type} = 'd';
 
       my $Path = $_;
-      opendir(my $Dh, "$Prefix/$_") || die "Could not open '$Prefix/$_' for dir reading: $!";
+      my $Dh;
+      if (!opendir($Dh, "$Prefix/$_")) {
+        next if !$ErrorHandler;
+        $ErrorHandler->("$Prefix/$_") if ref($ErrorHandler);
+        die "Could not open '$Prefix/$_' for dir reading: $!";
+      }
       my @Entries = grep { !/^(?:\.|\.\.)$/ } readdir($Dh);
       close($Dh);
       push @_, map { [ canon_path("$Path/$_"), \%Opts ] } @Entries;
@@ -510,23 +540,23 @@ sub _compare_checksum {
 
 =head1 SEE ALSO
 
-I<mtree>
+L<mtree>
 
 Latest news/details can also be found at:
 
-http://cpan.robm.fastmail.fm/fileset/
+L<http://cpan.robm.fastmail.fm/fileset/>
 
 =cut
 
 =head1 AUTHOR
 
-Rob Mueller E<lt>cpan@robm.fastmail.fmE<gt>.
+Rob Mueller E<lt>L<mailto:cpan@robm.fastmail.fm>E<gt>
 
 =cut
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2004 by FastMail IP Partners
+Copyright (C) 2004-2005 by FastMail IP Partners
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
