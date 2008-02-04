@@ -25,7 +25,7 @@ File::Set - Mange/build a set of files from a list of file/directories
   $FS->add_from_file('/tmp/config');
 
   # List files, calling callback for each dir/file
-  $FS->list(\&callback);
+  $FS->list($self, \&list_callback, 0);
 
   # Save a list of checksums for all files/directories
   $FS->save_checksum_db('/tmp/checksumdb');
@@ -33,6 +33,11 @@ File::Set - Mange/build a set of files from a list of file/directories
   # Compare a list against a previously saved checksum db
   #  and call callback for added/deleted/changed files
   $FS->compare_checksum_db('/tmp/checksumdb', \&callback)
+
+  sub list_callback {
+    my ($self, $prefix, $path, $type, $stat) = @_;
+    ... called back for each file/dir/etc found ...
+  }
 
 
 =head1 DESCRIPTION
@@ -45,7 +50,7 @@ sub-directories ignored.
 =cut
 
 # Use modules {{{
-our $VERSION = '1.01';
+our $VERSION = '1.02';
 
 use Cwd;
 use Digest::MD5;
@@ -556,7 +561,7 @@ Rob Mueller E<lt>L<mailto:cpan@robm.fastmail.fm>E<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2004-2005 by FastMail IP Partners
+Copyright (C) 2004-2008 by FastMail IP Partners
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
